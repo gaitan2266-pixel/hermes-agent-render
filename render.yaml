@@ -1,0 +1,97 @@
+# Render Blueprint for Hermes Agent
+# Docs: https://render.com/docs/blueprint-spec
+#
+# This blueprint deploys the Hermes Agent infrastructure on Render.
+# Before deploying, set the required environment variables in the Render dashboard.
+#
+# Required env vars (set via Render dashboard -> Environment):
+#   - API_SERVER_KEY          # Secret key for the OpenAI-compatible API server
+#   - TELEGRAM_BOT_TOKEN      # If using Telegram gateway
+#   - DISCORD_BOT_TOKEN       # If using Discord gateway
+#   - OPENAI_API_KEY          # Or other LLM provider key
+#
+# Note: Hermes Agent is primarily a CLI/gateway tool, not a traditional web app.
+# This blueprint deploys the dashboard and API server as web services,
+# and the messaging gateway as a background worker.
+
+services:
+  # ---------------------------------------------------------------------------
+  # Web Dashboard
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: hermes-dashboard
+    runtime: docker
+    plan: standard
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    # The dashboard listens on port 9119 by default; Render injects PORT.
+    # We override via --port to bind to Render's assigned $PORT.
+    startCommand: >
+      bash -c "
+        export HERMES_HOME=/opt/data &&
+        mkdir -p /opt/data &&
+        hermes dashboard --host 0.0.0.0 --port ${PORT:-9119} --no-open
+      "
+    envVars:
+      - key: HERMES_UID
+        value: "10000"
+      - key: HERMES_GID
+        value: "10000"
+      - key: HERMES_WEB_DIST
+        value: /opt/hermes/hermes_cli/web_dist
+      - key: PYTHONUNBUFFERED
+        value: "1"
+    healthCheckPath: /
+    autoDeploy: false   # Require manual deploys to avoid accidental reboots
+
+  # ---------------------------------------------------------------------------
+  # OpenAI-compatible API Server
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: hermes-api
+    runtime: docker
+    plan: standard
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    startCommand: >
+      bash -c "
+        export HERMES_HOME=/opt/data &&
+        mkdir -p /opt/data &&
+        hermes api-server --host 0.0.0.0 --port ${PORT:-8642}
+      "
+    envVars:
+      - key: HERMES_UID
+        value: "10000"
+      - key: HERMES_GID
+        value: "10000"
+      - key: API_SERVER_HOST
+        value: "0.0.0.0"
+      - key: PYTHONUNBUFFERED
+        value: "1"
+    healthCheckPath: /v1/models
+    autoDeploy: false
+
+  # ---------------------------------------------------------------------------
+  # Gateway Worker (Telegram, Discord, Slack, etc.)
+  # This is a background process that connects to messaging platforms.
+  # ---------------------------------------------------------------------------
+  - type: worker
+    name: hermes-gateway
+    runtime: docker
+    plan: standard
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    startCommand: >
+      bash -c "
+        export HERMES_HOME=/opt/data &&
+        mkdir -p /opt/data &&
+        hermes gateway run
+      "
+    envVars:
+      - key: HERMES_UID
+        value: "10000"
+      - key: HERMES_GID
+        value: "10000"
+      - key: PYTHONUNBUFFERED
+        value: "1"
+    autoDeploy: false
