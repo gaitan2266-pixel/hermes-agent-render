@@ -21,9 +21,11 @@ services:
     plan: standard
     dockerfilePath: ./Dockerfile
     dockerContext: .
-    # The Dockerfile ENTRYPOINT (entrypoint.sh) activates the venv, drops
-    # privileges, and then execs the command below.
-    startCommand: hermes dashboard --host 0.0.0.0 --port $PORT --no-open --insecure --skip-build
+    # Override the container command. The Dockerfile ENTRYPOINT runs
+    # entrypoint.sh which drops privileges; we pass a shell here so
+    # $PORT (set by Render) is expanded inside the container.
+    dockerCommand: >-
+      bash -c "hermes dashboard --host 0.0.0.0 --port $PORT --no-open --insecure --skip-build"
     envVars:
       - key: HERMES_HOME
         value: /opt/data
