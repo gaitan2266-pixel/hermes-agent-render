@@ -1,0 +1,35 @@
+# Render Blueprint for Hermes Agent
+# https://render.com/docs/blueprint-spec
+#
+# This deploys the Hermes Agent dashboard as a web service on Render.
+#
+# BEFORE deploying, set these environment variables in the Render dashboard:
+#   OPENAI_API_KEY          (or your LLM provider key)
+#   TELEGRAM_BOT_TOKEN      (optional — only if using Telegram gateway)
+#   DISCORD_BOT_TOKEN       (optional — only if using Discord gateway)
+#
+# Notes:
+#   - The Dockerfile builds the web UI assets during the image build,
+#     so --skip-build avoids a redundant npm build at runtime.
+#   - --insecure is required because Render assigns a public host/port.
+#   - The entrypoint.sh auto-creates config.yaml/.env/SOUL.md on first boot.
+
+services:
+  - type: web
+    name: hermes-agent
+    runtime: docker
+    plan: standard
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    # The Dockerfile ENTRYPOINT (entrypoint.sh) activates the venv, drops
+    # privileges, and then execs the command below.
+    startCommand: hermes dashboard --host 0.0.0.0 --port $PORT --no-open --insecure --skip-build
+    envVars:
+      - key: HERMES_HOME
+        value: /opt/data
+      - key: HERMES_WEB_DIST
+        value: /opt/hermes/hermes_cli/web_dist
+      - key: PYTHONUNBUFFERED
+        value: "1"
+    healthCheckPath: /
+    autoDeploy: false
